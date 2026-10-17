@@ -32,13 +32,14 @@ $('speak').onclick=()=>{if(!current())return;if(!('speechSynthesis'in window)){t
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'&&!$('bank').open&&!$('customDialog').open){e.preventDefault();checked?next():check()}});
 function bank(){const q=$('bankSearch').value.toLowerCase().trim();const found=all.filter(s=>($('bankTopic').value==='all'||String(s.topicId)===$('bankTopic').value)&&(!q||`${s.en} ${s.zh} ${s.topic}`.toLowerCase().includes(q)));$('bankInfo').textContent=`共 ${found.length} 句 · ${found.length>150?'显示前 150 句，请搜索缩小范围 · ':''}点击句子开始练习`;$('bankList').innerHTML=found.slice(0,150).map(s=>`<button class="bank-item" data-id="${s.id}"><small>${esc(s.category)} / ${esc(s.topic)} · ${s.custom?'自定义句库':`原书第 ${s.page} 页`}</small>${esc(s.en)}</button>`).join('')||'<p>没有找到相关句子。</p>'}
 $('bankTopic').innerHTML='<option value="all">全部主题</option>'+categories.map(c=>`<optgroup label="${esc(c)}">${topics.filter(t=>t.category===c).map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</optgroup>`).join('');$('bankTopic').value=String(state.topic);$('bankTopic').onchange=bank;$('bankButton').onclick=()=>{$('bankTopic').value=String(state.topic);bank();$('bank').showModal()};$('closeBank').onclick=()=>$('bank').close();$('bankSearch').oninput=bank;$('bankList').onclick=e=>{const b=e.target.closest('[data-id]');if(!b)return;view='all';const selected=all.find(s=>s.id===b.dataset.id);state.topic=String(selected.topicId);chosenCategory=selected.category;query='';$('search').value='';$('unit').value='sentence';buildPool(b.dataset.id);$('bank').close()};
-$('backup').onclick=()=>{const blob=new Blob([JSON.stringify({app:'jujian',version:2,state,customBanks:window.getCustomBanks?.()||[]})],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='句间-练习进度.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};$('restore').onclick=()=>$('backupFile').click();$('backupFile').onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());if(x.app!=='jujian'||!x.state)throw 0;if(x.customBanks?.length)window.importCustomBanks(x.customBanks);for(const k of ['done','wrong','stars']){if(!x.state[k]||typeof x.state[k]!=='object'||Array.isArray(x.state[k]))throw 0;Object.entries(x.state[k]).forEach(([id,val])=>{if(all.some(s=>s.id===id)&&val)state[k][id]=true})}for(const[d,ids]of Object.entries(x.state.days||{})){if(!Array.isArray(ids))continue;state.days[d]=[...new Set([...(state.days[d]||[]),...ids.filter(id=>all.some(s=>s.id===id))])]}persist();buildPool();toast('已合并导入进度')}catch{toast('无法读取备份，请选择句间导出的 JSON 文件')}e.target.value=''};
+$('backup').onclick=()=>{const blob=new Blob([JSON.stringify({app:'jujian',version:2,state,customBanks:window.getCustomBanks?.()||[]})],{type:'application/json'});
+const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='句间-练习进度.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};$('restore').onclick=()=>$('backupFile').click();$('backupFile').onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());if(x.app!=='jujian'||!x.state)throw 0;if(x.customBanks?.length)window.importCustomBanks(x.customBanks);for(const k of ['done','wrong','stars']){if(!x.state[k]||typeof x.state[k]!=='object'||Array.isArray(x.state[k]))throw 0;Object.entries(x.state[k]).forEach(([id,val])=>{if(all.some(s=>s.id===id)&&val)state[k][id]=true})}for(const[d,ids]of Object.entries(x.state.days||{})){if(!Array.isArray(ids))continue;state.days[d]=[...new Set([...(state.days[d]||[]),...ids.filter(id=>all.some(s=>s.id===id))])]}persist();buildPool();toast('已合并导入进度')}catch{toast('无法读取备份，请选择句间导出的 JSON 文件')}e.target.value=''};
 $('categoryPicker').onclick=e=>{const b=e.target.closest('[data-category]');if(!b)return;chosenCategory=b.dataset.category;const first=topics.find(t=>t.category===chosenCategory);if(first)chooseTopic(first.id)};$('topicPicker').onclick=e=>{const b=e.target.closest('[data-topic]');if(b)chooseTopic(b.dataset.topic)};stats();buildPool(state.lastId);
 
 function chinesePrompt(s){
  if(s.custom)return s.zh;
  const translated=window.TRANSLATIONS||{};
- if($('unit').value!=='paragraph')return translated[s.id]||'本句中文暂未加载，请刷新页面。';
+ if($('unit').value!=='paragraph')return translated[s.id]||'本句中文加载中…';
  const byText=new Map((window.CORPUS||[]).map(x=>[normal(x.en),translated[x.id]]));
  return s.paragraph.split(/(?<=[.!?])\s+(?=[A-Za-z"'])/).map(part=>byText.get(normal(part))||'（这一句的译文暂未加载）').join(' ');
 }
@@ -48,6 +49,16 @@ function renderChinesePrompt(s){
  $('translationNote').textContent=s.custom?'你在自定义句库中填写的中文译文或提示。':'Google 逐句机器译文 · 供回译练习参考，措辞可能与原书观点提示不同。';
  $('paragraphNote').hidden=!!s.custom;
  $('paragraphNote').open=false;
- $('originalChinese').textContent=s.custom?'':s.zh;
+ $('originalChinese').textContent=s.custom?'':(window.CORPUS_ZH&&window.CORPUS_ZH[s.id]||s.zh||'原文译文加载中…');
  $('contextBox').classList.add('sentence-prompt');
 }
+
+// ── 懒加载触发点（放在所有定义之后）──────────────────────────────────────
+(function(){
+ if(typeof document==='undefined'||!document.addEventListener)return;
+ const note=document.getElementById('paragraphNote');
+ if(note)note.addEventListener('toggle',function(){if(this.open)ensureDataZh();});
+ const boot=function(){ensureTranslations();};
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);
+ else boot();
+})();
