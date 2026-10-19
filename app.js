@@ -1,3 +1,25 @@
+// ── 按需加载（境外线路慢，首屏只带核心数据）──────────────────────────────
+let zhDataLoading=false, zhDataQueue=[], transLoading=false;
+function injectScriptOnce(src, done){
+ if(typeof document==='undefined'||!document.createElement||!document.head){if(done)done();return;}
+ const sc=document.createElement('script'); sc.src=src; sc.async=true;
+ sc.onload=done; sc.onerror=done;
+ document.head.appendChild(sc);
+}
+function ensureDataZh(cb){
+ if(window.CORPUS_ZH){if(cb)cb();return;}
+ if(cb)zhDataQueue.push(cb);
+ if(zhDataLoading)return;
+ zhDataLoading=true;
+ injectScriptOnce('data-zh.js',()=>{zhDataLoading=false;const q=zhDataQueue.splice(0);q.forEach(f=>{try{f()}catch(e){}});try{refresh()}catch(e){}});
+}
+function ensureTranslations(cb){
+ if(window.TRANSLATIONS){if(cb)cb();return;}
+ if(transLoading)return;
+ transLoading=true;
+ injectScriptOnce('translations.js',()=>{transLoading=false;try{refresh()}catch(e){}});
+}
+
 const $=id=>document.getElementById(id), esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const KEY='jujian-v1';let saved;try{saved=JSON.parse(localStorage.getItem(KEY)||'{}')}catch{}let state={done:{},wrong:{},stars:{},days:{},mode:'copy',topic:'all',...saved};let view='all',query='',pool=[],index=0,checked=false,revealed=false,hints=0,started=0,completionTracked=false,startTracked=false;
 let all=[...(window.CORPUS||[])],topics=[...new Map(all.map(x=>[x.topicId,{id:x.topicId,name:x.topic,category:x.category}])).values()];
